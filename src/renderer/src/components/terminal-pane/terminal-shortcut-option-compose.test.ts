@@ -164,6 +164,14 @@ describe('Option-composed characters in kitty keyboard panes', () => {
     ).toEqual({ type: 'sendInput', data: 'ą' })
   })
 
+  it('counts supplementary-plane compositions as one character, not a chord', () => {
+    // Astral-plane glyphs are length-2 UTF-16 strings; the guard must count code points.
+    expect(resolveKitty(event({ key: '𝕒', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '𝕒'
+    })
+  })
+
   it('still reports non-ASCII chords when the user explicitly configures Option as Alt', () => {
     // Direction A escape hatch: macOptionAsAlt 'true' keeps physical-key chords for TUI hotkeys.
     expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }), 'true', 0)).toEqual({
