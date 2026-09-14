@@ -56,10 +56,13 @@ function isLayoutComposedCharacter(
   key: string,
   characterWithoutOption: string | undefined
 ): boolean {
-  if (key.length !== 1) {
+  // Why code points, not UTF-16 units: supplementary-plane compositions (𝕒-style) are
+  // length 2 strings and must still count as a single composed character.
+  const chars = Array.from(key)
+  if (chars.length !== 1) {
     return false
   }
-  const codePoint = key.codePointAt(0) as number
+  const codePoint = chars[0].codePointAt(0) as number
   return (
     codePoint > 0x20 &&
     codePoint !== 0x7f &&
