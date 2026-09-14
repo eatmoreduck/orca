@@ -26,6 +26,19 @@ function restoreOriginalTimezone(): void {
 
 afterAll(restoreOriginalTimezone)
 
+describe('floorToMinute', () => {
+  it('floors positive timestamps to the minute start', () => {
+    expect(floorToMinute(179351460045_000)).toBe(179351460045_000 - 45_000)
+    expect(floorToMinute(0)).toBe(0)
+  })
+
+  it('floors pre-epoch timestamps toward negative infinity', () => {
+    expect(floorToMinute(-15_000)).toBe(-60_000)
+    expect(floorToMinute(-1)).toBe(-60_000)
+    expect(floorToMinute(-60_000)).toBe(-60_000)
+  })
+})
+
 describe.skipIf(!newYorkTzApplied())('automation schedule occurrences across DST', () => {
   const dtstart = new Date('2026-10-31T12:00:00-04:00').getTime()
   const firstHalfOfRepeatedHour = new Date('2026-11-01T01:30:00-04:00').getTime()

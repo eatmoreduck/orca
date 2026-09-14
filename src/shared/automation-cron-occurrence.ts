@@ -13,9 +13,11 @@ export function startOfLocalDay(timestamp: number): number {
  * Floors to the start of the minute in absolute time. Pure UTC arithmetic:
  * recomposing local wall-clock fields would resolve an ambiguous DST
  * fall-back minute to the earlier offset, moving the result backwards.
+ * Math.floor (not `%`, which keeps the sign) so pre-epoch inputs floor
+ * toward negative infinity.
  */
 export function floorToMinute(timestamp: number): number {
-  return timestamp - (timestamp % 60_000)
+  return Math.floor(timestamp / 60_000) * 60_000
 }
 
 export function cronMatches(rule: ParsedCron, timestamp: number): boolean {
