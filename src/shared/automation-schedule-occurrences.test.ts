@@ -1,6 +1,10 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { floorToMinute } from './automation-cron-occurrence'
-import { nextAutomationOccurrenceAfter } from './automation-schedule-occurrences'
+import {
+  buildAutomationRrule,
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from './automation-schedule-occurrences'
 
 // Why: Node on Windows ignores runtime TZ changes; skip there instead of failing opaquely.
 const originalTz = process.env.TZ
@@ -55,6 +59,29 @@ describe.skipIf(!newYorkTzApplied())('automation schedule occurrences across DST
       const next = nextAutomationOccurrenceAfter(expression, dtstart, after)
       expect(next).toBeGreaterThan(after)
     }
+  })
+
+  it('fires both repeats of an hourly minute in the DST fall-back hour', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 30 })
+    expect(nextAutomationOccurrenceAfter(rrule, dtstart, firstHalfOfRepeatedHour)).toBe(
+      secondHalfOfRepeatedHour
+    )
+  })
+
+  it('advances hourly schedules past the repeated hour instead of returning the after instant', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 30 })
+    const next = nextAutomationOccurrenceAfter(rrule, dtstart, secondHalfOfRepeatedHour)
+    expect(next).toBe(new Date('2026-11-01T02:30:00-05:00').getTime())
+  })
+
+  it('returns the EST-pass minute as the latest hourly occurrence at or before now', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 30 })
+    const latest = latestAutomationOccurrenceAtOrBefore(
+      rrule,
+      dtstart,
+      secondHalfOfRepeatedHour + 45_000
+    )
+    expect(latest).toBe(secondHalfOfRepeatedHour)
   })
 
   it('still skips the nonexistent spring-forward minute', () => {
