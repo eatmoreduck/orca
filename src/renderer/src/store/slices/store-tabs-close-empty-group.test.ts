@@ -296,4 +296,145 @@ describe('closeEmptyGroup with drifted tabOrder', () => {
       expect.arrayContaining(['survivor-tab', 'unlisted-tab'])
     )
   })
+
+  it('moves every unlisted owned tab when the source tabOrder is already empty', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'unlisted-a',
+            entityId: 'unlisted-a',
+            worktreeId: wt,
+            groupId: 'group-drift',
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'unlisted-b',
+            entityId: 'unlisted-b',
+            worktreeId: wt,
+            groupId: 'group-drift',
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'survivor-tab',
+            entityId: 'survivor-tab',
+            worktreeId: wt,
+            groupId: 'group-live',
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({ id: 'group-drift', worktreeId: wt, activeTabId: null, tabOrder: [] }),
+          makeTabGroup({
+            id: 'group-live',
+            worktreeId: wt,
+            activeTabId: 'survivor-tab',
+            tabOrder: ['survivor-tab']
+          })
+        ]
+      },
+      layoutByWorktree: {
+        [wt]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'group-drift' },
+          second: { type: 'leaf', groupId: 'group-live' }
+        }
+      },
+      activeGroupIdByWorktree: { [wt]: 'group-drift' }
+    })
+
+    expect(store.getState().mergeGroupIntoSibling(wt, 'group-drift')).toBe('group-live')
+
+    const s = store.getState()
+    // Why: moving the first tab empties the source group's tabOrder, which used to
+    // collapse the group mid-loop and strand every later tab at a dead groupId.
+    expect(s.groupsByWorktree[wt]?.map((group) => group.id)).toEqual(['group-live'])
+    const driftedTabs = s.unifiedTabsByWorktree[wt]?.filter((tab) => tab.id !== 'survivor-tab')
+    expect(driftedTabs).toHaveLength(2)
+    expect(driftedTabs?.every((tab) => tab.groupId === 'group-live')).toBe(true)
+  })
+
+  it('preserves the source strip order when merging after a drag reorder', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'tab-a',
+            entityId: 'tab-a',
+            worktreeId: wt,
+            groupId: 'group-drift',
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'tab-b',
+            entityId: 'tab-b',
+            worktreeId: wt,
+            groupId: 'group-drift',
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'survivor-tab',
+            entityId: 'survivor-tab',
+            worktreeId: wt,
+            groupId: 'group-live',
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          // Why: tabOrder [tab-b, tab-a] against array order [tab-a, tab-b] models a
+          // drag reorder, which rewrites only tabOrder — the merge must follow it.
+          makeTabGroup({
+            id: 'group-drift',
+            worktreeId: wt,
+            activeTabId: 'tab-b',
+            tabOrder: ['tab-b', 'tab-a']
+          }),
+          makeTabGroup({
+            id: 'group-live',
+            worktreeId: wt,
+            activeTabId: 'survivor-tab',
+            tabOrder: ['survivor-tab']
+          })
+        ]
+      },
+      layoutByWorktree: {
+        [wt]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'group-drift' },
+          second: { type: 'leaf', groupId: 'group-live' }
+        }
+      },
+      activeGroupIdByWorktree: { [wt]: 'group-drift' }
+    })
+
+    expect(store.getState().mergeGroupIntoSibling(wt, 'group-drift')).toBe('group-live')
+
+    const s = store.getState()
+    expect(s.groupsByWorktree[wt]?.map((group) => group.id)).toEqual(['group-live'])
+    expect(s.groupsByWorktree[wt]?.[0]?.tabOrder).toEqual(['survivor-tab', 'tab-b', 'tab-a'])
+  })
 })

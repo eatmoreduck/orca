@@ -45,16 +45,24 @@ export function createTabsSecondaryActions(
       const orderedSourceTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
         (tab) => tab.groupId === groupId
       )
-      // Why owned-first: tabOrder can omit owned tabs, and stranding one would leave this
-      // call reporting a merge while the source group survives closeEmptyGroup's owned-tab
-      // guard (#21016). tabOrder order is preserved for listed tabs; unlisted tabs append.
+      // Why: move every owned tab so the merge completes before closeEmptyGroup collapses
+      // the source — listed tabs in tabOrder (strip) order, owned tabs tabOrder omits
+      // appended after (#21016). keepEmptySourceGroup holds the source group open for the
+      // loop; an emptied tabOrder would otherwise collapse it and strand the rest.
+      const tabById = new Map(orderedSourceTabs.map((tab) => [tab.id, tab]))
       const listedIds = new Set(sourceGroup.tabOrder)
       const sourceTabs = [
-        ...orderedSourceTabs.filter((tab) => listedIds.has(tab.id)),
+        ...sourceGroup.tabOrder.flatMap((id) => {
+          const tab = tabById.get(id)
+          return tab ? [tab] : []
+        }),
         ...orderedSourceTabs.filter((tab) => !listedIds.has(tab.id))
       ]
       for (const tab of sourceTabs) {
-        get().moveUnifiedTabToGroup(tab.id, targetGroupId, { recordInteraction: false })
+        get().moveUnifiedTabToGroup(tab.id, targetGroupId, {
+          recordInteraction: false,
+          keepEmptySourceGroup: true
+        })
       }
       get().closeEmptyGroup(worktreeId, groupId)
       get().recordFeatureInteraction?.('terminal-panes')
