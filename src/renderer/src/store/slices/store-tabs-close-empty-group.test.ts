@@ -228,4 +228,72 @@ describe('closeEmptyGroup with drifted tabOrder', () => {
     expect(s.groupsByWorktree[wt]?.map((group) => group.id)).toEqual(['group-live'])
     expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.id)).toEqual(['survivor-tab'])
   })
+
+  it('completes a merge whose group owns a live tab that tabOrder omits', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'unlisted-tab',
+            entityId: 'unlisted-tab',
+            worktreeId: wt,
+            groupId: 'group-drift',
+            contentType: 'terminal'
+          }),
+          makeUnifiedTab({
+            id: 'survivor-tab',
+            entityId: 'survivor-tab',
+            worktreeId: wt,
+            groupId: 'group-live',
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({ id: 'group-drift', worktreeId: wt, activeTabId: null, tabOrder: [] }),
+          makeTabGroup({
+            id: 'group-live',
+            worktreeId: wt,
+            activeTabId: 'survivor-tab',
+            tabOrder: ['survivor-tab']
+          })
+        ]
+      },
+      layoutByWorktree: {
+        [wt]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'group-drift' },
+          second: { type: 'leaf', groupId: 'group-live' }
+        }
+      },
+      activeGroupIdByWorktree: { [wt]: 'group-drift' }
+    })
+
+    expect(store.getState().mergeGroupIntoSibling(wt, 'group-drift')).toBe('group-live')
+
+    const s = store.getState()
+    // Why: the merge must not report success while the source group survives its own
+    // owned-tab guard — the unlisted tab moves with the merge (#21016 follow-up).
+    expect(s.groupsByWorktree[wt]?.map((group) => group.id)).toEqual(['group-live'])
+    const survivingTabIds = s.unifiedTabsByWorktree[wt]?.map((tab) => tab.id) ?? []
+    expect(survivingTabIds).toHaveLength(2)
+    expect(survivingTabIds).toEqual(expect.arrayContaining(['survivor-tab', 'unlisted-tab']))
+    expect(s.unifiedTabsByWorktree[wt]?.find((tab) => tab.id === 'unlisted-tab')?.groupId).toBe(
+      'group-live'
+    )
+    expect(s.groupsByWorktree[wt]?.[0]?.tabOrder).toEqual(
+      expect.arrayContaining(['survivor-tab', 'unlisted-tab'])
+    )
+  })
 })
