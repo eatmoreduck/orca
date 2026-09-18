@@ -41,7 +41,14 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       return
     }
     if (runViewState.availability === 'terminal' && !terminalTarget) {
-      toast.error(runViewState.statusLabel)
+      // Why fall through to the workspace instead of dead-ending: a run dispatched on a
+      // paired remote runtime carries pane-key/pty-id metadata this window's local
+      // tab/layout/pty ledgers can never resolve, even though activating the workspace
+      // surfaces its live session (#21213). Only a workspace that cannot be activated
+      // still surfaces the unavailable label.
+      if (!activateAndRevealWorktree(run.workspaceId)) {
+        toast.error(runViewState.statusLabel)
+      }
       return
     }
     if (terminalTarget && currentLayout) {
