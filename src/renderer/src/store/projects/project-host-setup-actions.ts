@@ -10,6 +10,7 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import { pruneRemovedRepoWorktreeRows } from './project-host-setup-row-prune'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
@@ -214,24 +215,18 @@ export function createProjectHostSetupActions(
               : s.projects
           const survivingRepoIds = new Set(repos.map((r) => r.id))
           const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
-          if (removedRepoIds.length === 0) {
-            return { repos, projects, projectHostSetups }
-          }
           // Why: this delete removes the repo from `repos` itself, so a later repos:changed refetch
-          // no longer sees it; prune the deleted repo's worktree rows here as removeProject does.
-          const nextWorktreesByRepo = { ...s.worktreesByRepo }
-          const nextDetectedWorktreesByRepo = { ...s.detectedWorktreesByRepo }
-          for (const id of removedRepoIds) {
-            delete nextWorktreesByRepo[id]
-            delete nextDetectedWorktreesByRepo[id]
+          // no longer sees it; prune the deleted repo's rows here as removeProject does.
+          const nextWorktreeRows = pruneRemovedRepoWorktreeRows(s, removedRepoIds, repo, repoHostId)
+          if (nextWorktreeRows === s) {
+            return { repos, projects, projectHostSetups }
           }
           return {
             repos,
             projects,
             projectHostSetups,
             ...omitSparsePresetsForRepos(s, removedRepoIds),
-            worktreesByRepo: nextWorktreesByRepo,
-            detectedWorktreesByRepo: nextDetectedWorktreesByRepo,
+            ...nextWorktreeRows,
             activeRepoId:
               s.activeRepoId && removedRepoIds.includes(s.activeRepoId) ? null : s.activeRepoId,
             filterRepoIds: s.filterRepoIds.filter((id) => !removedRepoIds.includes(id)),

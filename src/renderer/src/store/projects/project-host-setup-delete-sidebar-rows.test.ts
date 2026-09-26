@@ -79,10 +79,11 @@ beforeEach(() => {
 })
 
 function worktreeFor(repoId: string, hostId?: Worktree['hostId']) {
+  const path = `/${repoId}/${hostId ?? 'local'}/wt`
   return makeWorktree({
-    id: `${repoId}::/${repoId}-wt`,
+    id: `${repoId}::${path}`,
     repoId,
-    path: `/${repoId}/wt`,
+    path,
     ...(hostId ? { hostId } : {})
   })
 }
@@ -144,29 +145,70 @@ describe('deleteProjectHostSetup prunes the deleted repo worktree rows', () => {
     expect(state.filterRepoIds).toEqual([])
   })
 
-  it('keeps the rows when a sibling host still publishes the same repo id', async () => {
+  it('keeps the sibling host rows and drops the deleted host rows for a shared repo id', async () => {
     deleteHostSetup.mockResolvedValue({
       project: goneProject,
       setup: goneSetup,
       repo: removedRepo
     } satisfies ProjectHostSetupDeleteResult)
     const store = createTestStore()
-    const sharedRows = [worktreeFor(removedRepo.id)]
-    const sharedDetected = detectedFor(removedRepo.id)
+    const localWt = worktreeFor(removedRepo.id, 'local')
+    const runtimeWt = worktreeFor(removedRepo.id, 'runtime:env-1')
+    const localDetected = detectedFor(removedRepo.id, 'local').worktrees[0]
+    const runtimeDetected = detectedFor(removedRepo.id, 'runtime:env-1').worktrees[0]
     store.setState({
       repos: [removedRepo, runtimeTwinRepo],
       projects: [goneProject],
       projectHostSetups: [goneSetup],
-      worktreesByRepo: { [removedRepo.id]: sharedRows },
-      detectedWorktreesByRepo: { [removedRepo.id]: sharedDetected }
+      worktreesByRepo: { [removedRepo.id]: [localWt, runtimeWt] },
+      detectedWorktreesByRepo: {
+        [removedRepo.id]: {
+          repoId: removedRepo.id,
+          authoritative: true,
+          source: 'git',
+          worktrees: [localDetected, runtimeDetected]
+        }
+      },
+      activeRepoId: removedRepo.id
     })
 
     await store.getState().deleteProjectHostSetup({ setupId: goneSetup.id })
 
     const state = store.getState()
     expect(state.repos.map((repo) => repo.executionHostId)).toEqual(['runtime:env-1'])
-    expect(state.worktreesByRepo[removedRepo.id]).toBe(sharedRows)
-    expect(state.detectedWorktreesByRepo[removedRepo.id]).toBe(sharedDetected)
+    expect(state.worktreesByRepo[removedRepo.id]).toEqual([runtimeWt])
+    expect(state.detectedWorktreesByRepo[removedRepo.id]?.worktrees).toEqual([runtimeDetected])
+    // The repo is still visible through the sibling host, so the selection stays.
+    expect(state.activeRepoId).toBe(removedRepo.id)
+  })
+
+  it('leaves the rows untouched when only a sibling host has rows for the shared id', async () => {
+    deleteHostSetup.mockResolvedValue({
+      project: goneProject,
+      setup: goneSetup,
+      repo: removedRepo
+    } satisfies ProjectHostSetupDeleteResult)
+    const store = createTestStore()
+    const runtimeWt = worktreeFor(removedRepo.id, 'runtime:env-1')
+    const runtimeDetected = detectedFor(removedRepo.id, 'runtime:env-1')
+    store.setState({
+      repos: [removedRepo, runtimeTwinRepo],
+      projects: [goneProject],
+      projectHostSetups: [goneSetup],
+      worktreesByRepo: { [removedRepo.id]: [runtimeWt] },
+      detectedWorktreesByRepo: { [removedRepo.id]: runtimeDetected }
+    })
+    const sortEpochBefore = store.getState().sortEpoch
+    const rowsBefore = store.getState().worktreesByRepo[removedRepo.id]
+
+    await store.getState().deleteProjectHostSetup({ setupId: goneSetup.id })
+
+    const state = store.getState()
+    expect(state.repos.map((repo) => repo.executionHostId)).toEqual(['runtime:env-1'])
+    expect(state.worktreesByRepo[removedRepo.id]).toBe(rowsBefore)
+    expect(state.worktreesByRepo[removedRepo.id]).toEqual([runtimeWt])
+    expect(state.detectedWorktreesByRepo[removedRepo.id]).toBe(runtimeDetected)
+    expect(state.sortEpoch).toBe(sortEpochBefore)
   })
 
   it('leaves the rows untouched when the deleted setup carried no repo', async () => {
