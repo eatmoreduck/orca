@@ -214,11 +214,28 @@ export function createProjectHostSetupActions(
               : s.projects
           const survivingRepoIds = new Set(repos.map((r) => r.id))
           const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
+          if (removedRepoIds.length === 0) {
+            return { repos, projects, projectHostSetups }
+          }
+          // Why: this delete removes the repo from `repos` itself, so a later repos:changed refetch
+          // no longer sees it; prune the deleted repo's worktree rows here as removeProject does.
+          const nextWorktreesByRepo = { ...s.worktreesByRepo }
+          const nextDetectedWorktreesByRepo = { ...s.detectedWorktreesByRepo }
+          for (const id of removedRepoIds) {
+            delete nextWorktreesByRepo[id]
+            delete nextDetectedWorktreesByRepo[id]
+          }
           return {
             repos,
             projects,
             projectHostSetups,
-            ...omitSparsePresetsForRepos(s, removedRepoIds)
+            ...omitSparsePresetsForRepos(s, removedRepoIds),
+            worktreesByRepo: nextWorktreesByRepo,
+            detectedWorktreesByRepo: nextDetectedWorktreesByRepo,
+            activeRepoId:
+              s.activeRepoId && removedRepoIds.includes(s.activeRepoId) ? null : s.activeRepoId,
+            filterRepoIds: s.filterRepoIds.filter((id) => !removedRepoIds.includes(id)),
+            sortEpoch: s.sortEpoch + 1
           }
         })
         return { ...result, repo }
