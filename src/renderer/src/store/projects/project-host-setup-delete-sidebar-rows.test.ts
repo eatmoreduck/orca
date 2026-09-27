@@ -211,6 +211,79 @@ describe('deleteProjectHostSetup prunes the deleted repo worktree rows', () => {
     expect(state.sortEpoch).toBe(sortEpochBefore)
   })
 
+  it('still cleans up selections and bumps sortEpoch when the removed repo had no rows', async () => {
+    deleteHostSetup.mockResolvedValue({
+      project: goneProject,
+      setup: goneSetup,
+      repo: removedRepo
+    } satisfies ProjectHostSetupDeleteResult)
+    const store = createTestStore()
+    store.setState({
+      repos: [keptRepo, removedRepo],
+      projects: [goneProject],
+      projectHostSetups: [goneSetup],
+      activeRepoId: removedRepo.id,
+      filterRepoIds: [removedRepo.id]
+    })
+    const sortEpochBefore = store.getState().sortEpoch
+
+    await store.getState().deleteProjectHostSetup({ setupId: goneSetup.id })
+
+    const state = store.getState()
+    expect(state.repos.map((repo) => repo.id)).toEqual([keptRepo.id])
+    expect(state.activeRepoId).toBeNull()
+    expect(state.filterRepoIds).toEqual([])
+    expect(state.sortEpoch).toBe(sortEpochBefore + 1)
+  })
+
+  it('keeps the sibling row when both hosts list a worktree at the same path (same row id)', async () => {
+    deleteHostSetup.mockResolvedValue({
+      project: goneProject,
+      setup: goneSetup,
+      repo: removedRepo
+    } satisfies ProjectHostSetupDeleteResult)
+    const store = createTestStore()
+    // Worktree ids are repoId::path, host-independent: same path on two hosts = same id.
+    const sharedId = `${removedRepo.id}::/gone/shared-wt`
+    const localRow = makeWorktree({
+      id: sharedId,
+      repoId: removedRepo.id,
+      path: '/gone/shared-wt',
+      hostId: 'local'
+    })
+    const runtimeRow = makeWorktree({
+      id: sharedId,
+      repoId: removedRepo.id,
+      path: '/gone/shared-wt',
+      hostId: 'runtime:env-1'
+    })
+    store.setState({
+      repos: [removedRepo, runtimeTwinRepo],
+      projects: [goneProject],
+      projectHostSetups: [goneSetup],
+      worktreesByRepo: { [removedRepo.id]: [localRow, runtimeRow] },
+      detectedWorktreesByRepo: {
+        [removedRepo.id]: {
+          repoId: removedRepo.id,
+          authoritative: true,
+          source: 'git',
+          worktrees: [
+            { ...localRow, ownership: 'orca-managed', selectedCheckout: false, visible: true },
+            { ...runtimeRow, ownership: 'orca-managed', selectedCheckout: false, visible: true }
+          ]
+        }
+      }
+    })
+
+    await store.getState().deleteProjectHostSetup({ setupId: goneSetup.id })
+
+    const state = store.getState()
+    expect(state.worktreesByRepo[removedRepo.id]).toEqual([runtimeRow])
+    expect(state.detectedWorktreesByRepo[removedRepo.id]?.worktrees.map((w) => w.hostId)).toEqual([
+      'runtime:env-1'
+    ])
+  })
+
   it('leaves the rows untouched when the deleted setup carried no repo', async () => {
     deleteHostSetup.mockResolvedValue({
       project: goneProject,

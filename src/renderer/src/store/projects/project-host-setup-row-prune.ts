@@ -11,28 +11,30 @@ export function pruneRemovedRepoWorktreeRows(
   removedRepoIds: readonly string[],
   deletedRepo: Pick<Repo, 'id'> | undefined,
   deletedHostId: string | null
-): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'> {
-  let twinRepoId: string | null = null
-  let twinHostId: string | null = null
-  if (deletedRepo && deletedHostId && !removedRepoIds.includes(deletedRepo.id)) {
-    twinRepoId = deletedRepo.id
-    twinHostId = deletedHostId
-  }
-  const deletedHostRowIds = new Set(
-    twinRepoId && twinHostId
-      ? [
-          ...(state.worktreesByRepo[twinRepoId] ?? []),
-          ...(state.detectedWorktreesByRepo[twinRepoId]?.worktrees ?? [])
-        ]
-          .filter((worktree) => worktreeBelongsToHost(worktree, twinHostId))
-          .map((worktree) => worktree.id)
-      : []
-  )
+): { rows: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>; changed: boolean } {
+  // Why filter rows by host predicate, never by row id: worktree ids are `repoId::path` and
+  // host-independent, so a sibling host publishing the same raw id at the same path shares the id.
+  const twin: { repoId: string; hostId: string } | undefined =
+    deletedRepo && deletedHostId && !removedRepoIds.includes(deletedRepo.id)
+      ? { repoId: deletedRepo.id, hostId: deletedHostId }
+      : undefined
+  const twinDeletedHostRows = twin
+    ? [
+        ...(state.worktreesByRepo[twin.repoId] ?? []),
+        ...(state.detectedWorktreesByRepo[twin.repoId]?.worktrees ?? [])
+      ].filter((worktree) => worktreeBelongsToHost(worktree, twin.hostId))
+    : []
   const touchesRemovedBucket = removedRepoIds.some(
     (id) => id in state.worktreesByRepo || id in state.detectedWorktreesByRepo
   )
-  if (!touchesRemovedBucket && deletedHostRowIds.size === 0) {
-    return state
+  if (!touchesRemovedBucket && twinDeletedHostRows.length === 0) {
+    return {
+      rows: {
+        worktreesByRepo: state.worktreesByRepo,
+        detectedWorktreesByRepo: state.detectedWorktreesByRepo
+      },
+      changed: false
+    }
   }
   const nextWorktreesByRepo = { ...state.worktreesByRepo }
   const nextDetectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
@@ -40,29 +42,32 @@ export function pruneRemovedRepoWorktreeRows(
     delete nextWorktreesByRepo[id]
     delete nextDetectedWorktreesByRepo[id]
   }
-  if (twinRepoId && twinHostId) {
-    const remaining = (nextWorktreesByRepo[twinRepoId] ?? []).filter(
-      (worktree) => !deletedHostRowIds.has(worktree.id)
+  if (twin) {
+    const remaining = (nextWorktreesByRepo[twin.repoId] ?? []).filter(
+      (worktree) => !worktreeBelongsToHost(worktree, twin.hostId)
     )
     if (remaining.length > 0) {
-      nextWorktreesByRepo[twinRepoId] = remaining
+      nextWorktreesByRepo[twin.repoId] = remaining
     } else {
-      delete nextWorktreesByRepo[twinRepoId]
+      delete nextWorktreesByRepo[twin.repoId]
     }
-    const detected = nextDetectedWorktreesByRepo[twinRepoId]
+    const detected = nextDetectedWorktreesByRepo[twin.repoId]
     if (detected) {
       const remainingDetected = detected.worktrees.filter(
-        (worktree) => !deletedHostRowIds.has(worktree.id)
+        (worktree) => !worktreeBelongsToHost(worktree, twin.hostId)
       )
       if (remainingDetected.length > 0) {
-        nextDetectedWorktreesByRepo[twinRepoId] = { ...detected, worktrees: remainingDetected }
+        nextDetectedWorktreesByRepo[twin.repoId] = { ...detected, worktrees: remainingDetected }
       } else {
-        delete nextDetectedWorktreesByRepo[twinRepoId]
+        delete nextDetectedWorktreesByRepo[twin.repoId]
       }
     }
   }
   return {
-    worktreesByRepo: nextWorktreesByRepo,
-    detectedWorktreesByRepo: nextDetectedWorktreesByRepo
+    rows: {
+      worktreesByRepo: nextWorktreesByRepo,
+      detectedWorktreesByRepo: nextDetectedWorktreesByRepo
+    },
+    changed: true
   }
 }
