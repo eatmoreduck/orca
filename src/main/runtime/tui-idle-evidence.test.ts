@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  hasQuietCodexReadyPrompt,
   hasQuietMuseReadyPrompt,
   isTuiIdleSatisfied,
   type TuiIdleEvidenceRecord,
@@ -22,6 +23,7 @@ function input(overrides: Partial<TuiIdleSatisfactionInput> = {}): TuiIdleSatisf
     record: record(),
     readPositiveBodyEvidence: () => false,
     readMuseReadyBodyEvidence: () => true,
+    readCodexReadyBodyEvidence: () => false,
     agent: 'muse',
     firstPartyStatus: null,
     quiescenceMs: QUIESCENCE_MS,
@@ -73,6 +75,76 @@ describe('isTuiIdleSatisfied muse lane', () => {
   it('lets a fresh first-party working status veto the Muse body', () => {
     expect(
       isTuiIdleSatisfied(input({ firstPartyStatus: { state: 'working', updatedAt: Date.now() } }))
+    ).toBe(false)
+  })
+})
+
+describe('hasQuietCodexReadyPrompt', () => {
+  it('settles the codex composer once the stream has gone quiet', () => {
+    expect(hasQuietCodexReadyPrompt(record(), 'codex', () => true, QUIESCENCE_MS)).toBe(true)
+  })
+
+  it('holds a streaming composer to the quiescence demand', () => {
+    expect(
+      hasQuietCodexReadyPrompt(
+        record({ lastOutputAt: Date.now() }),
+        'codex',
+        () => true,
+        QUIESCENCE_MS
+      )
+    ).toBe(false)
+  })
+
+  it('demands an output clock like the Muse lane', () => {
+    expect(
+      hasQuietCodexReadyPrompt(record({ lastOutputAt: null }), 'codex', () => true, QUIESCENCE_MS)
+    ).toBe(false)
+  })
+
+  it('refuses a pane that is not a known codex pane', () => {
+    expect(hasQuietCodexReadyPrompt(record(), 'gemini', () => true, QUIESCENCE_MS)).toBe(false)
+    expect(hasQuietCodexReadyPrompt(record(), null, () => true, QUIESCENCE_MS)).toBe(false)
+  })
+})
+
+describe('isTuiIdleSatisfied codex composer lane', () => {
+  it('settles a known codex pane whose one-shot startup header left the retained tail (#23241)', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          readPositiveBodyEvidence: () => false,
+          readMuseReadyBodyEvidence: () => false,
+          readCodexReadyBodyEvidence: () => true,
+          agent: 'codex'
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('lets a fresh first-party working status veto the composer lane', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          readPositiveBodyEvidence: () => false,
+          readMuseReadyBodyEvidence: () => false,
+          readCodexReadyBodyEvidence: () => true,
+          agent: 'codex',
+          firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('does not let another agent quoting the codex composer settle', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          readPositiveBodyEvidence: () => false,
+          readMuseReadyBodyEvidence: () => false,
+          readCodexReadyBodyEvidence: () => true,
+          agent: 'gemini'
+        })
+      )
     ).toBe(false)
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalWaitBlockedReason,
+  isCodexComposerPromptPreview,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
 } from './terminal-wait-detection'
@@ -580,5 +581,46 @@ describe('isMuseReadyPromptPreview', () => {
     const waitText = waitTextFor([...MUSE_READY_SCREEN_META, ...MUSE_TRUST_DIALOG])
     expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
     expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+  })
+})
+
+describe('isCodexComposerPromptPreview', () => {
+  it('recognizes the codex composer after the one-shot startup header left the retained tail (#23241)', () => {
+    // Real idle tail shape captured from codex 0.156.1: the composer status line is the last
+    // thing painted; the header box scrolled out of the bounded tail long before.
+    expect(
+      isCodexComposerPromptPreview(
+        waitTextFor([
+          '› Ask Codex to do anything',
+          '  gpt-6-astra xhigh · ~/Documents/Justforfun/jev-chat-jarvis-ios',
+          '  ⚠ 1 warning · f2 to view'
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('stays false when no codex composer was ever painted', () => {
+    expect(isCodexComposerPromptPreview(waitTextFor(['npm run build finished cleanly']))).toBe(
+      false
+    )
+  })
+
+  it('refuses the composer once a blocked dialog opens below it', () => {
+    const waitText = waitTextFor([
+      '› Ask Codex to do anything',
+      '  gpt-6-astra xhigh · ~/Documents/Justforfun/jev-chat-jarvis-ios',
+      ...MUSE_TRUST_DIALOG
+    ])
+    expect(isCodexComposerPromptPreview(waitText)).toBe(false)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+  })
+
+  it('accepts the composer when the blocked dialog only survives in scrollback above it', () => {
+    const waitText = waitTextFor([
+      ...MUSE_TRUST_DIALOG,
+      '› Ask Codex to do anything',
+      '  gpt-6-astra xhigh · ~/Documents/Justforfun/jev-chat-jarvis-ios'
+    ])
+    expect(isCodexComposerPromptPreview(waitText)).toBe(true)
   })
 })

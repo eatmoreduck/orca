@@ -66,6 +66,21 @@ export function isMuseReadyPromptPreview(preview: string): boolean {
   return blockedSignal === null || blockedSignal.index <= readyIndex
 }
 
+// Why: the codex startup header is a one-shot paint — startup warnings or the intro
+// animation can push it out of the retained tail before the composer settles (#23241),
+// and a known-agent pane has no quiet-foreground fallback (#9976). The composer
+// placeholder is repainted for the life of the pane, so it stands in for the header;
+// the ranking gates this on stream quiescence, so a streaming turn never settles on it.
+export function isCodexComposerPromptPreview(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  const composerIndex = normalized.lastIndexOf('ask codex to do anything')
+  if (composerIndex === -1) {
+    return false
+  }
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  return blockedSignal === null || blockedSignal.index <= composerIndex
+}
+
 export function detectTerminalWaitBlockedReason(
   preview: string
 ): RuntimeTerminalWaitBlockedReason | null {

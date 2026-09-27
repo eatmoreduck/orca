@@ -123,6 +123,12 @@ export type TuiIdleSatisfactionInput = {
   readPositiveBodyEvidence: () => boolean
   /** Tier 1b body evidence: a Muse ready screen. Thunk for the same reason as above. */
   readMuseReadyBodyEvidence: () => boolean
+  /**
+   * Tier 1b body evidence: the codex composer, believed only once the stream has gone
+   * quiet. Thunk for the same reason as above; every satisfaction site must supply it so
+   * the immediate check and the poll agree about the same pane.
+   */
+  readCodexReadyBodyEvidence: () => boolean
   agent: TuiAgent | null | undefined
   firstPartyStatus: FirstPartyAgentStatus
   quiescenceMs: number
@@ -158,6 +164,38 @@ export function hasQuietMuseReadyPrompt(
   return Date.now() - record.lastOutputAt >= quiescenceMs
 }
 
+/**
+ * Tier 1b: a codex composer in the body, believed only once the stream has gone quiet.
+ *
+ * Codex's startup header is a one-shot paint: startup warnings or the intro animation can
+ * push it out of the retained tail before the composer settles, and then the tier-1 body
+ * check never fires again — a known-agent pane has no quiet-foreground fallback to catch
+ * it (#9976), so the worker-start readiness wait runs to its timeout with Codex sitting
+ * idle at its prompt (#23241). Unlike the header, the composer placeholder is repainted
+ * for the life of the pane. Scoped to panes Orca itself knows are codex (launch agent or
+ * foreground process) so another agent's scrollback quoting codex cannot settle its wait,
+ * and gated on quiescence like the Muse lane so a streaming turn never satisfies.
+ */
+export function hasQuietCodexReadyPrompt(
+  record: TuiIdleEvidenceRecord,
+  agent: TuiAgent | null | undefined,
+  readBodyEvidence: () => boolean,
+  quiescenceMs: number
+): boolean {
+  if (agent !== 'codex') {
+    return false
+  }
+  if (!readBodyEvidence()) {
+    return false
+  }
+  // Why: same rule as the tier-3 lane — without an output clock there is no
+  // corroboration available, so hold out instead of settling.
+  if (record.lastOutputAt === null) {
+    return false
+  }
+  return Date.now() - record.lastOutputAt >= quiescenceMs
+}
+
 /** The one place the tiers are combined; every satisfaction site routes here. */
 export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
   // Why the title before the body: both are tier 1, so either settles, but the title is a
@@ -174,6 +212,16 @@ export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
       input.record,
       input.agent,
       input.readMuseReadyBodyEvidence,
+      input.quiescenceMs
+    )
+  ) {
+    return true
+  }
+  if (
+    hasQuietCodexReadyPrompt(
+      input.record,
+      input.agent,
+      input.readCodexReadyBodyEvidence,
       input.quiescenceMs
     )
   ) {

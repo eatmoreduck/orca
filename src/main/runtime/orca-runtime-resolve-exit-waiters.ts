@@ -6,6 +6,7 @@ import { buildPtyTerminalWaitResult, buildTerminalWaitResult } from './terminal-
 import type { AgentStatus } from '../../shared/agent-detection'
 import {
   detectExplicitIdleStatusFromTitle,
+  isCodexComposerPromptPreview,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
 } from './terminal-wait-detection'
@@ -115,6 +116,10 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
         isMuseReadyPromptPreview(
           buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
         ),
+      readCodexReadyBodyEvidence: () =>
+        isCodexComposerPromptPreview(
+          buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+        ),
       agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
       firstPartyStatus:
         (leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.lastExplicitAgentStatus : null) ?? null,
@@ -202,6 +207,10 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
         ),
       readMuseReadyBodyEvidence: () =>
         isMuseReadyPromptPreview(
+          buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+        ),
+      readCodexReadyBodyEvidence: () =>
+        isCodexComposerPromptPreview(
           buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
         ),
       agent: this.getPaneAgentForTuiIdle(pty.ptyId),
