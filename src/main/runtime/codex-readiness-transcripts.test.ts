@@ -13,6 +13,10 @@
  * assertions on the real bytes; a capture long enough to evict the header mid-turn would
  * pin the live path end to end and is welcome follow-up evidence.
  *
+ * The idle and turn-ended captures are also the two screen states from #23212 ("terminal
+ * wait --for tui-idle" times out on an idle Codex tab and again after a completed turn);
+ * the two live-pipeline settle tests below replay exactly those states.
+ *
  * Captured from codex-cli 0.156.1 (brew cask) on macOS, PTY 100×30; update dialog skipped
  * with esc, folder trust granted, task "Reply with exactly the word done and nothing else."
  */
