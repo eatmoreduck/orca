@@ -174,7 +174,10 @@ export function hasQuietMuseReadyPrompt(
  * idle at its prompt (#23241). Unlike the header, the composer placeholder is repainted
  * for the life of the pane. Scoped to panes Orca itself knows are codex (launch agent or
  * foreground process) so another agent's scrollback quoting codex cannot settle its wait,
- * and gated on quiescence like the Muse lane so a streaming turn never satisfies.
+ * and gated on quiescence like the Muse lane so a streaming turn never satisfies. The
+ * detector also refuses a composer whose pane is mid-turn (`… • esc to interrupt` painted
+ * after it), which is what keeps the lane safe when `tui.animations` is off and a mid-turn
+ * stall would otherwise look like quiet.
  */
 export function hasQuietCodexReadyPrompt(
   record: TuiIdleEvidenceRecord,

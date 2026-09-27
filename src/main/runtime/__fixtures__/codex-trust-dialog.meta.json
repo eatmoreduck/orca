@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-27T04:47:28.925Z",
+  "platform": "darwin",
+  "command": ["/opt/homebrew/bin/codex"],
+  "cols": 100,
+  "rows": 30,
+  "note": "codex-cli 0.156.1 (brew cask), free-plan local account, update dialog dismissed with esc at 3s",
+  "exitCode": 0
+}

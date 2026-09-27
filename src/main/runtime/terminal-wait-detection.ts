@@ -1,4 +1,5 @@
 import { memoizeTitleClassification } from '../../shared/terminal-title-classification-memo'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import {
   detectAgentStatusFromTitle,
   isOpenCodeNativeTitle,
@@ -71,10 +72,22 @@ export function isMuseReadyPromptPreview(preview: string): boolean {
 // and a known-agent pane has no quiet-foreground fallback (#9976). The composer
 // placeholder is repainted for the life of the pane, so it stands in for the header;
 // the ranking gates this on stream quiescence, so a streaming turn never settles on it.
+// The composer is also painted while a turn runs, so this refuses whenever a turn's own
+// status line ("… • esc to interrupt") appears after the newest composer paint — that
+// paint survives in the retained tail even with `tui.animations` off, where the stream
+// would otherwise stay quiet through a mid-turn stall. Codex repaints that status row
+// with SGR spans inside the phrase, so the marker search runs on the ANSI-stripped
+// region. Committed transcripts: __fixtures__/codex-busy-mid-turn.txt (marker after the
+// composer → refuse) and codex-busy-turn-ended.txt (markers only before the final
+// composer → settle).
 export function isCodexComposerPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
   const composerIndex = normalized.lastIndexOf('ask codex to do anything')
   if (composerIndex === -1) {
+    return false
+  }
+  const statusRowAfterComposer = stripAnsiEscapeSequences(normalized.slice(composerIndex))
+  if (statusRowAfterComposer.includes('esc to inter')) {
     return false
   }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
@@ -104,8 +117,13 @@ export function findActionableTerminalWaitBlockedSignal(
 
 // Why: a live prompt (idle OR busy) proves the startup modal was dismissed, so a mid-run Cursor lane stops reporting stale trust hits.
 function findDismissedStartupModalIndex(normalized: string): number | null {
+  // Why the raw index beside the header finder: after the one-shot codex header left the
+  // retained tail (#23241), the composer is the only remaining proof that codex reached its
+  // prompt and dismissed whatever dialog came before it — same standing as the Muse screen.
+  const codexComposerIndex = normalized.lastIndexOf('ask codex to do anything')
   const indexes = [
     findCodexReadyPromptIndex(normalized),
+    codexComposerIndex === -1 ? null : codexComposerIndex,
     findAntigravityReadyPromptIndex(normalized),
     findCursorActivePromptIndex(normalized),
     findMuseReadyPromptIndex(normalized)

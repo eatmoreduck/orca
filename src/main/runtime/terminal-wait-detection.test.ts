@@ -586,8 +586,7 @@ describe('isMuseReadyPromptPreview', () => {
 
 describe('isCodexComposerPromptPreview', () => {
   it('recognizes the codex composer after the one-shot startup header left the retained tail (#23241)', () => {
-    // Real idle tail shape captured from codex 0.156.1: the composer status line is the last
-    // thing painted; the header box scrolled out of the bounded tail long before.
+    // Real idle tail shape; committed capture: __fixtures__/codex-idle-composer.txt.
     expect(
       isCodexComposerPromptPreview(
         waitTextFor([
@@ -597,6 +596,22 @@ describe('isCodexComposerPromptPreview', () => {
         ])
       )
     ).toBe(true)
+  })
+
+  it('refuses while a turn is in flight past the newest composer paint', () => {
+    // Mid-turn, the placeholder sits between two "esc to interrupt" status paints — the
+    // committed capture codex-busy-mid-turn.txt pins the real bytes (including codex's
+    // own "interupt" spelling).
+    expect(
+      isCodexComposerPromptPreview(
+        waitTextFor([
+          '• Working (9s • esc to interrupt)',
+          '› Ask Codex to do anything',
+          '  gpt-6-astra xhigh · ~/work',
+          '10s • esc to interrupt)'
+        ])
+      )
+    ).toBe(false)
   })
 
   it('stays false when no codex composer was ever painted', () => {
@@ -621,6 +636,9 @@ describe('isCodexComposerPromptPreview', () => {
       '› Ask Codex to do anything',
       '  gpt-6-astra xhigh · ~/Documents/Justforfun/jev-chat-jarvis-ios'
     ])
+    // Parity with Muse: a composer painted after the dialog proves the dialog was
+    // dismissed, so the wait path must not report it as actionable.
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
     expect(isCodexComposerPromptPreview(waitText)).toBe(true)
   })
 })

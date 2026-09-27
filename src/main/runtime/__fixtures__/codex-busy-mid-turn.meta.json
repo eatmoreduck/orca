@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-27T04:53:05.036Z",
+  "platform": "darwin",
+  "command": ["/opt/homebrew/bin/codex"],
+  "cols": 100,
+  "rows": 30,
+  "note": "codex-cli 0.156.1 (brew cask); task submitted at 12.5s, capture stops mid-turn while the status line shows esc to interrupt",
+  "exitCode": 0
+}
