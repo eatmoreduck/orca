@@ -12,11 +12,23 @@ const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export function claudeProjectsRootDirs(args: {
   claudeProjectsDir?: string
   wslHomeDirs?: readonly string[]
+  env?: NodeJS.ProcessEnv
 }): string[] {
   return [
-    args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
+    args.claudeProjectsDir ?? claudeProjectsDirFromEnv(args.env),
     ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
   ]
+}
+
+// Why: Claude Code relocates its whole state root — projects/ included — under
+// CLAUDE_CONFIG_DIR, and orca itself sets it when launching an account-scoped
+// claude (cli/handlers/account.ts), so a scanner keyed only to ~/.claude misses
+// every non-default account's sessions (#23505). Explicit callers still win;
+// WSL distro roots stay under each distro's home because the host-side env
+// says nothing about a distro's shell environment.
+function claudeProjectsDirFromEnv(env: NodeJS.ProcessEnv | undefined): string {
+  const configDir = (env ?? process.env).CLAUDE_CONFIG_DIR?.trim()
+  return configDir ? join(configDir, 'projects') : CLAUDE_PROJECTS_DIR
 }
 
 // The local host and each WSL distro's OMP sessions root. Callers reading OMP
