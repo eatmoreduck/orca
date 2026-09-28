@@ -25,7 +25,7 @@ describe('ompSessionsRootDirs', () => {
 })
 
 describe('claudeProjectsRootDirs', () => {
-  it('uses the CLAUDE_CONFIG_DIR projects root for the host when set (#23505)', () => {
+  it('searches the CLAUDE_CONFIG_DIR root first and keeps the default (#23505)', () => {
     expect(
       claudeProjectsRootDirs({
         env: { CLAUDE_CONFIG_DIR: '/home/ada/.claude-work' },
@@ -33,17 +33,24 @@ describe('claudeProjectsRootDirs', () => {
       })
     ).toEqual([
       '/home/ada/.claude-work/projects',
+      join(homedir(), '.claude', 'projects'),
       join('/wsl/ubuntu/home/ada', '.claude', 'projects')
     ])
   })
 
-  it('falls back to ~/.claude/projects when the override is unset or blank', () => {
+  it('collapses to one host root when the config dir is the default', () => {
+    expect(
+      claudeProjectsRootDirs({ env: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude') } })
+    ).toEqual([join(homedir(), '.claude', 'projects')])
+  })
+
+  it('uses only ~/.claude/projects when the override is unset or blank', () => {
     const hostRoot = join(homedir(), '.claude', 'projects')
     expect(claudeProjectsRootDirs({ env: {} })).toEqual([hostRoot])
     expect(claudeProjectsRootDirs({ env: { CLAUDE_CONFIG_DIR: '   ' } })).toEqual([hostRoot])
   })
 
-  it('lets an explicit claudeProjectsDir win over the environment', () => {
+  it('lets an explicit claudeProjectsDir replace the host roots, as before', () => {
     expect(
       claudeProjectsRootDirs({
         claudeProjectsDir: '/explicit/projects',

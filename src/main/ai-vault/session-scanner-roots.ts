@@ -9,26 +9,33 @@ const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 
 // The local host and each WSL distro's `~/.claude/projects`. Callers reading
 // Claude session files by path use these roots to reject arbitrary paths.
+// Why both host roots and not just the config-dir one: adopting CLAUDE_CONFIG_DIR
+// would otherwise hide every session written before it was set — the same
+// managed-then-default shape as native-chat's claudeProjectsDirs
+// (session-file-resolver.ts), de-duped so the usual case still scans once.
 export function claudeProjectsRootDirs(args: {
   claudeProjectsDir?: string
   wslHomeDirs?: readonly string[]
   env?: NodeJS.ProcessEnv
 }): string[] {
+  const wslRoots = (args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+  if (args.claudeProjectsDir !== undefined) {
+    return [args.claudeProjectsDir, ...wslRoots]
+  }
+  // Why: Claude Code relocates its whole state root — projects/ included — under
+  // CLAUDE_CONFIG_DIR, and orca itself sets it when launching an account-scoped
+  // claude (cli/handlers/account.ts), so a scanner keyed only to ~/.claude misses
+  // every non-default account's sessions (#23505). The env is injectable so tests
+  // stay deterministic; WSL distro roots stay under each distro's home because the
+  // host-side env says nothing about a distro's shell environment.
+  const configDir = (args.env ?? process.env).CLAUDE_CONFIG_DIR?.trim()
+  const hostCandidates = configDir
+    ? [join(configDir, 'projects'), CLAUDE_PROJECTS_DIR]
+    : [CLAUDE_PROJECTS_DIR]
   return [
-    args.claudeProjectsDir ?? claudeProjectsDirFromEnv(args.env),
-    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+    ...hostCandidates.filter((dir, index) => hostCandidates.indexOf(dir) === index),
+    ...wslRoots
   ]
-}
-
-// Why: Claude Code relocates its whole state root — projects/ included — under
-// CLAUDE_CONFIG_DIR, and orca itself sets it when launching an account-scoped
-// claude (cli/handlers/account.ts), so a scanner keyed only to ~/.claude misses
-// every non-default account's sessions (#23505). Explicit callers still win;
-// WSL distro roots stay under each distro's home because the host-side env
-// says nothing about a distro's shell environment.
-function claudeProjectsDirFromEnv(env: NodeJS.ProcessEnv | undefined): string {
-  const configDir = (env ?? process.env).CLAUDE_CONFIG_DIR?.trim()
-  return configDir ? join(configDir, 'projects') : CLAUDE_PROJECTS_DIR
 }
 
 // The local host and each WSL distro's OMP sessions root. Callers reading OMP
