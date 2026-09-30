@@ -14,7 +14,17 @@ afterEach(() => {
   if (savedPlatform) {
     Object.defineProperty(process, 'platform', savedPlatform)
   }
-  process.env = { ...savedEnv }
+  // Why in-place restore and not reassigning process.env: the assignment
+  // detaches the env proxy from the native environment, so later os.homedir()
+  // calls read a stale native HOME while userInfo().homedir reads passwd.
+  for (const key of Object.keys(process.env)) {
+    if (!(key in savedEnv)) {
+      delete process.env[key]
+    }
+  }
+  for (const [key, value] of Object.entries(savedEnv)) {
+    process.env[key] = value
+  }
 })
 
 function withPlatform(platform: NodeJS.Platform): void {
@@ -44,7 +54,7 @@ describe('buildLocalPreflightEnv', () => {
     delete process.env.HOME
     const env = buildLocalPreflightEnv()
     expect(env?.PATH).toBe('/usr/bin:/bin')
-    expect(env?.HOME).toBe(os.homedir())
+    expect(env?.HOME).toBe(os.userInfo().homedir)
   })
 
   it('treats empty-string PATH and HOME as missing on posix', () => {
@@ -53,6 +63,9 @@ describe('buildLocalPreflightEnv', () => {
     process.env.HOME = ''
     const env = buildLocalPreflightEnv()
     expect(env?.PATH).toBe(POSIX_FALLBACK_PATH)
-    expect(env?.HOME).toBe(os.homedir())
+    // Why userInfo and not os.homedir(): with HOME set-but-empty, os.homedir()
+    // answers the empty string verbatim, so the floor must go through passwd.
+    expect(env?.HOME).toBe(os.userInfo().homedir)
+    expect(env?.HOME).not.toBe('')
   })
 })
