@@ -172,7 +172,10 @@ describe('WorktreeCard pinned repo icon', () => {
       )
 
       expect(markup).toContain('data-pinned-repo-label')
-      expect(markup).toContain('zephyr-monorepo')
+      // Why scoped to the label element: the repo name also appears in the
+      // identity chip's aria-label and tooltip, so a bare contains() would stay
+      // green with an empty visible label.
+      expect(markup).toMatch(/data-pinned-repo-label[^>]*>zephyr-monorepo</)
 
       const grouped = renderToStaticMarkup(
         <WorktreeCard

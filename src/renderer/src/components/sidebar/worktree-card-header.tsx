@@ -105,9 +105,13 @@ export function WorktreeCardHeader({
             {/* Why the visible label: the pinned section mixes repos, and its rows
                 usually all read "main" + PRIMARY, so an icon-plus-hover is the only
                 repo cue — unusable for telling the cards apart at a glance (#24304).
-                Scoped to pinned rows only; grouped rows keep the compact look. */}
+                Scoped to pinned rows only; grouped rows keep the compact look.
+                Why max-w: the label renders ahead of the shrinkable title, so
+                without a cap a long repo name squeezes the title to zero width —
+                truncate only engages when shrink-0 content is width-bounded
+                (same cap as the metadata-row repo label). */}
             <span
-              className="min-w-0 shrink-0 truncate text-[11px] leading-none text-muted-foreground"
+              className="min-w-0 max-w-[6rem] shrink-0 truncate text-[11px] leading-none text-muted-foreground"
               data-pinned-repo-label={repo!.id}
             >
               {repo!.displayName}
