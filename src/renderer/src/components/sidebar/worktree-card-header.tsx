@@ -93,14 +93,26 @@ export function WorktreeCardHeader({
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && (
-          <RepoIdentityChip repo={repo!}>
-            <RepoIconGlyph
-              repoIcon={repo!.repoIcon}
-              color={resolveRepoHeaderColor(repo!.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </RepoIdentityChip>
+          <>
+            <RepoIdentityChip repo={repo!}>
+              <RepoIconGlyph
+                repoIcon={repo!.repoIcon}
+                color={resolveRepoHeaderColor(repo!.badgeColor)}
+                className="size-full"
+                iconClassName="size-3"
+              />
+            </RepoIdentityChip>
+            {/* Why the visible label: the pinned section mixes repos, and its rows
+                usually all read "main" + PRIMARY, so an icon-plus-hover is the only
+                repo cue — unusable for telling the cards apart at a glance (#24304).
+                Scoped to pinned rows only; grouped rows keep the compact look. */}
+            <span
+              className="min-w-0 shrink-0 truncate text-[11px] leading-none text-muted-foreground"
+              data-pinned-repo-label={repo!.id}
+            >
+              {repo!.displayName}
+            </span>
+          </>
         )}
 
         {repo?.connectionId && (

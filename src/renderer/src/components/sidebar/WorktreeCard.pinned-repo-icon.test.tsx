@@ -157,6 +157,36 @@ describe('WorktreeCard pinned repo icon', () => {
   )
 
   it(
+    'shows a visible repo label on pinned cards so mixed-repo pins stay distinguishable (#24304)',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo({ displayName: 'zephyr-monorepo' })}
+          isActive={false}
+          inPinnedSection
+          hideRepoBadge
+        />
+      )
+
+      expect(markup).toContain('data-pinned-repo-label')
+      expect(markup).toContain('zephyr-monorepo')
+
+      const grouped = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ isPinned: false })}
+          repo={makeRepo({ displayName: 'zephyr-monorepo' })}
+          isActive={false}
+        />
+      )
+      expect(grouped).not.toContain('data-pinned-repo-label')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
     'uses the pinned-style repo icon in new card style instead of a metadata-row badge',
     async () => {
       settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
