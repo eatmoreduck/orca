@@ -49,7 +49,8 @@ function requestBrowserBasicAuthCredentials(args: {
   guest: Electron.WebContents
   renderer: Electron.WebContents
   browserPageId: string
-  authInfo: { host: string; port: number; scheme?: string; realm?: string }
+  authInfo: { host: string; port: number; realm?: string }
+  pageProtocol: string | undefined
   callback: (username?: string, password?: string) => void
 }): void {
   const requestId = randomUUID()
@@ -58,7 +59,7 @@ function requestBrowserBasicAuthCredentials(args: {
     browserPageId: args.browserPageId,
     host: args.authInfo.host,
     port: args.authInfo.port,
-    ...(args.authInfo.scheme ? { scheme: args.authInfo.scheme } : {}),
+    ...(args.pageProtocol ? { protocol: args.pageProtocol } : {}),
     ...(args.authInfo.realm ? { realm: args.authInfo.realm } : {})
   }
 
@@ -108,7 +109,8 @@ function requestBrowserBasicAuthCredentials(args: {
 export function handleBrowserBasicAuthLogin(
   event: { preventDefault(): void },
   guest: Electron.WebContents | null,
-  authInfo: { host: string; port: number; scheme?: string; realm?: string },
+  authenticationResponseDetails: { url?: string },
+  authInfo: { host: string; port: number; realm?: string },
   callback: (username?: string, password?: string) => void
 ): void {
   if (!guest || guest.isDestroyed()) {
@@ -119,11 +121,22 @@ export function handleBrowserBasicAuthLogin(
     return
   }
   event.preventDefault()
+  // Why from the response URL and not authInfo.scheme: scheme names the auth
+  // method (e.g. "basic"), so it must never label the site; the challenged
+  // page's own protocol is what a user expects to read there.
+  let pageProtocol: string | undefined
+  try {
+    const url = new URL(authenticationResponseDetails.url ?? '')
+    pageProtocol = url.protocol.replace(/:$/, '') || undefined
+  } catch {
+    pageProtocol = undefined
+  }
   requestBrowserBasicAuthCredentials({
     guest,
     renderer: context.renderer,
     browserPageId: context.browserPageId,
     authInfo,
+    pageProtocol,
     callback
   })
 }

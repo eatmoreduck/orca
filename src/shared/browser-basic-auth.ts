@@ -3,7 +3,8 @@ export type BrowserBasicAuthRequest = {
   browserPageId: string
   host: string
   port: number
-  scheme?: string
+  /** URL protocol of the challenged page (e.g. "https"), not the auth scheme. */
+  protocol?: string
   realm?: string
 }
 

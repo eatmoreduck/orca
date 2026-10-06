@@ -64,7 +64,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       // Why: server basic-auth challenges had no handler at all, so the login
       // callback was never called and the request failed with 401 immediately
       // instead of prompting (#25894). Proxy challenges keep their own path.
-      handleBrowserBasicAuthLogin(event, webContents, authInfo, callback)
+      handleBrowserBasicAuthLogin(event, webContents, details, authInfo, callback)
       return
     }
     handleElectronProxyLogin(

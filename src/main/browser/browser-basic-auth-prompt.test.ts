@@ -66,12 +66,24 @@ describe('browser basic auth prompt', () => {
     const callback = vi.fn()
     const event = { preventDefault: vi.fn() }
 
-    handleBrowserBasicAuthLogin(event, guest, { host: '127.0.0.1', port: 8765 }, callback)
+    handleBrowserBasicAuthLogin(
+      event,
+      guest,
+      { url: 'http://127.0.0.1:8765/private' },
+      { host: '127.0.0.1', port: 8765, realm: 'OrcaTestRealm' },
+      callback
+    )
 
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
     expect(renderer.send).toHaveBeenCalledWith(
       'browser:basic-auth-requested',
-      expect.objectContaining({ browserPageId: 'browser-page-1', host: '127.0.0.1', port: 8765 })
+      expect.objectContaining({
+        browserPageId: 'browser-page-1',
+        host: '127.0.0.1',
+        port: 8765,
+        protocol: 'http',
+        realm: 'OrcaTestRealm'
+      })
     )
     expect(callback).not.toHaveBeenCalled()
 
@@ -95,6 +107,7 @@ describe('browser basic auth prompt', () => {
     handleBrowserBasicAuthLogin(
       { preventDefault: vi.fn() },
       guest,
+      { url: 'https://example.com/signin' },
       { host: 'example.com', port: 443 },
       callback
     )
@@ -113,6 +126,7 @@ describe('browser basic auth prompt', () => {
     handleBrowserBasicAuthLogin(
       { preventDefault: vi.fn() },
       guest,
+      { url: 'https://example.com/signin' },
       { host: 'example.com', port: 443 },
       callback
     )
@@ -138,6 +152,7 @@ describe('browser basic auth prompt', () => {
     handleBrowserBasicAuthLogin(
       { preventDefault: vi.fn() },
       guest,
+      { url: 'https://example.com/signin' },
       { host: 'example.com', port: 443 },
       callback
     )
@@ -155,7 +170,13 @@ describe('browser basic auth prompt', () => {
     const callback = vi.fn()
     const event = { preventDefault: vi.fn() }
 
-    handleBrowserBasicAuthLogin(event, guest, { host: 'example.com', port: 443 }, callback)
+    handleBrowserBasicAuthLogin(
+      event,
+      guest,
+      { url: 'https://example.com/signin' },
+      { host: 'example.com', port: 443 },
+      callback
+    )
 
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(callback).not.toHaveBeenCalled()
@@ -170,6 +191,7 @@ describe('browser basic auth prompt', () => {
     handleBrowserBasicAuthLogin(
       { preventDefault: vi.fn() },
       guest,
+      { url: 'https://example.com/signin' },
       { host: 'example.com', port: 443 },
       callback
     )

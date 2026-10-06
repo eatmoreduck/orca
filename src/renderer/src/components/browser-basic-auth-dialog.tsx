@@ -35,6 +35,11 @@ export function BrowserBasicAuthDialog(): React.JSX.Element {
   const removeRequest = useCallback((requestId: string) => {
     setRequests((current) => current.filter((request) => request.requestId !== requestId))
     setRespondingRequestId((current) => (current === requestId ? null : current))
+    // Why cleared here: a queued challenge from another host becomes active the
+    // moment this request leaves; pre-filled credentials from the previous host
+    // must never be one keystroke away from being submitted there.
+    setUsername('')
+    setPassword('')
   }, [])
 
   useEffect(() => {
@@ -98,9 +103,20 @@ export function BrowserBasicAuthDialog(): React.JSX.Element {
     [removeRequest, respondingRequestId]
   )
 
+  // Why protocol from the payload: authInfo.scheme names the auth method
+  // ("basic"), not the site's scheme; the protocol comes from the challenged
+  // page's URL in the login event. A port is hidden only when it is the
+  // protocol's default.
+  const protocol = activeRequest?.protocol
+  const isDefaultPort =
+    protocol === 'https'
+      ? activeRequest?.port === 443
+      : protocol === 'http'
+        ? activeRequest?.port === 80
+        : false
   const siteLabel = activeRequest
-    ? `${activeRequest.scheme ? `${activeRequest.scheme}://` : ''}${activeRequest.host}${
-        activeRequest.port === 80 || activeRequest.port === 443 ? '' : `:${activeRequest.port}`
+    ? `${protocol ? `${protocol}://` : ''}${activeRequest.host}${
+        isDefaultPort ? '' : `:${activeRequest.port}`
       }`
     : null
   const busy = activeRequest !== null && respondingRequestId === activeRequest.requestId
