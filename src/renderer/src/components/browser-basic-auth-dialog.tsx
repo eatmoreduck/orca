@@ -33,13 +33,17 @@ export function BrowserBasicAuthDialog(): React.JSX.Element {
   }, [requests])
 
   const removeRequest = useCallback((requestId: string) => {
+    // Why only for the active request: the fields must never survive into a
+    // different host's challenge — clearing when the ACTIVE request leaves the
+    // queue guarantees the next queued challenge starts empty — but a QUEUED
+    // challenge closing in the background (timeout, teardown) must not wipe
+    // credentials being typed into the active one.
+    if (requestsRef.current[0]?.requestId === requestId) {
+      setUsername('')
+      setPassword('')
+    }
     setRequests((current) => current.filter((request) => request.requestId !== requestId))
     setRespondingRequestId((current) => (current === requestId ? null : current))
-    // Why cleared here: a queued challenge from another host becomes active the
-    // moment this request leaves; pre-filled credentials from the previous host
-    // must never be one keystroke away from being submitted there.
-    setUsername('')
-    setPassword('')
   }, [])
 
   useEffect(() => {
