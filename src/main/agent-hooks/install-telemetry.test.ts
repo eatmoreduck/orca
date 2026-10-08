@@ -43,6 +43,26 @@ describe('recordManagedHookInstallFailure', () => {
     expect(JSON.stringify(props)).not.toContain('Cannot read')
   })
 
+  it('rejects free-form code strings that could carry paths (#26604)', () => {
+    const error = Object.assign(new Error('hidden message'), {
+      code: 'EACCES: /home/alice/.claude/settings.json'
+    })
+    recordManagedHookInstallFailure('codex', error)
+
+    const [, props] = trackMock.mock.calls[0] as [string, { error_code: string }]
+    expect(props.error_code).toBe('Error')
+    expect(JSON.stringify(props)).not.toContain('/home/alice')
+    expect(JSON.stringify(props)).not.toContain('hidden message')
+  })
+
+  it('still records an event for objects with no constructor and no code', () => {
+    recordManagedHookInstallFailure('cursor', Object.create(null))
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    const [, props] = trackMock.mock.calls[0] as [string, { error_code: string }]
+    expect(props.error_code).toBe('unknown')
+  })
+
   it('handles non-Error values and telemetry failures', () => {
     trackMock.mockImplementationOnce(() => {
       throw new Error('telemetry failed')
