@@ -163,4 +163,20 @@ describe('planSidebarRows pinned folder workspaces', () => {
     expect(pinnedHeader?.hostWorktreeCounts?.get('ssh:gpu-vm')).toBe(1)
     expect(sectionKeyBefore(rows, 'folder-remote')).toBe(PINNED_GROUP_KEY)
   })
+
+  it('gives duplicated pinned and lane folder rows distinct row keys', () => {
+    const rows = planRows({
+      groupBy: 'repo',
+      folderWorkspaces: [pinnedFolder],
+      pinnedDisplayPolicy: 'duplicate-in-groups'
+    })
+
+    const keys = rows
+      .filter(
+        (row) => row.type === 'folder-workspace' && row.folderWorkspace.id === 'folder-pinned'
+      )
+      .map((row) => (row.type === 'folder-workspace' ? row.key : ''))
+    expect(keys).toHaveLength(2)
+    expect(new Set(keys).size).toBe(2)
+  })
 })

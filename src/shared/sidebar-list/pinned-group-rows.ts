@@ -91,7 +91,7 @@ export function emitPinnedGroup(
   for (const pair of [...pinnedFolderWorkspaces].sort((left, right) =>
     compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
   )) {
-    result.push(buildFolderWorkspaceRow(pair, 0))
+    result.push(buildFolderWorkspaceRow(pair, 0, PINNED_GROUP_KEY))
   }
   if (!allowImportedFallback) {
     return
