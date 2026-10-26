@@ -61,6 +61,23 @@ describe('oscLinkSiblingSegments', () => {
   it('returns nothing when the hovered cell has no link id', () => {
     expect(oscLinkSiblingSegments(buffer, 1, 1)).toEqual([])
   })
+
+  it('matches a row that reopens the same URI with a different id (no id=)', () => {
+    // Two rows, each its own opening: ids 7 and 8, same URI behind both.
+    const rows = [oscLine(7, 3, 79), oscLine(8, 3, 59)]
+    const uriBuffer = { getLine: (y: number) => rows[y] ?? plainLine() }
+    const resolveUri = (id: number) => (id === 7 || id === 8 ? 'https://same.example/u' : undefined)
+    expect(oscLinkSiblingSegments(uriBuffer, 1, 10, resolveUri)).toEqual([
+      { y: 2, startX: 4, endX: 60 }
+    ])
+  })
+
+  it('does not match a different URI even with a resolver', () => {
+    const rows = [oscLine(7, 3, 79), oscLine(8, 3, 59)]
+    const uriBuffer = { getLine: (y: number) => rows[y] ?? plainLine() }
+    const resolveUri = (id: number) => (id === 7 ? 'https://a.example/' : 'https://b.example/')
+    expect(oscLinkSiblingSegments(uriBuffer, 1, 10, resolveUri)).toEqual([])
+  })
 })
 
 describe('linkRowSegmentsFromRanges', () => {
@@ -78,7 +95,7 @@ describe('createSiblingLinkUnderliner', () => {
       dispose: () => void
       onRender: (cb: (el: HTMLElement) => void) => void
     }[] = []
-    const marker = { line: 0 }
+    const marker = { line: 0, dispose: vi.fn() }
     return {
       decorations,
       terminal: {
@@ -121,5 +138,15 @@ describe('createSiblingLinkUnderliner', () => {
     underliner.underline([{ y: 2, startX: 4, endX: 60 }])
     underliner.underline([{ y: 1, startX: 4, endX: 80 }])
     expect(terminal.registerDecoration).toHaveBeenCalledTimes(2)
+  })
+
+  it('disposes the marker with the decoration on clear (#33589 review)', () => {
+    const { terminal } = makeTerminal()
+    const marker = { line: 0, dispose: vi.fn() }
+    terminal.registerMarker.mockImplementation(() => marker)
+    const underliner = createSiblingLinkUnderliner(terminal as never)
+    underliner.underline([{ y: 2, startX: 4, endX: 60 }])
+    underliner.clear()
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
   })
 })

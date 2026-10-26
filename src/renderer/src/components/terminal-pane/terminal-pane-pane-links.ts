@@ -16,6 +16,7 @@ import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import {
+  createOscLinkUriResolver,
   createSiblingLinkUnderliner,
   oscLinkSiblingSegments
 } from './terminal-hover-link-sibling-underline'
@@ -199,11 +200,14 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       // #33553: underline the sibling rows of a hard-wrapped OSC 8 link — xterm only
       // underlines the hovered link's own range.
       if (range) {
+        // The resolver matches rows that reopen the same URI without id= — xterm
+        // gives those openings distinct link ids.
         siblingUnderliner.underline(
           oscLinkSiblingSegments(
             pane.terminal.buffer.active,
             range.start.y,
-            range.start.x
+            range.start.x,
+            createOscLinkUriResolver(pane.terminal)
           )
         )
       }

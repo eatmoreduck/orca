@@ -16,6 +16,9 @@ export type LinkRowSegment = { y: number; startX: number; endX: number }
 
 type BufferLike = { getLine(y: number): IBufferLine | undefined }
 
+/** Resolves an xterm link id to its URI; undefined when the id is unknown. */
+export type OscLinkUriResolver = (urlId: number) => string | undefined
+
 function lineCellUrlId(line: IBufferLine | undefined, x: number): number {
   // The public cell API omits hyperlink metadata; sniff the runtime shape like
   // terminal-osc-link-cells.ts does instead of casting to internals.
@@ -36,18 +39,17 @@ function lineCellUrlId(line: IBufferLine | undefined, x: number): number {
   return typeof urlId === 'number' && urlId > 0 ? urlId : 0
 }
 
-/** The first contiguous run of cells carrying `urlId` on one line; 0-based x, inclusive. */
-export function oscLinkSegmentOnLine(
+function contiguousMatchingRun(
   line: IBufferLine | undefined,
-  urlId: number
+  matches: (line: IBufferLine | undefined, x: number) => boolean
 ): { startX: number; endX: number } | null {
-  if (!line || urlId <= 0) {
+  if (!line) {
     return null
   }
   let run: { startX: number; endX: number } | null = null
   let best: { startX: number; endX: number } | null = null
   for (let x = 0; x < line.length; x++) {
-    if (lineCellUrlId(line, x) === urlId) {
+    if (matches(line, x)) {
       run = run ?? { startX: x, endX: x }
       run.endX = x
     } else if (run) {
@@ -58,28 +60,56 @@ export function oscLinkSegmentOnLine(
   return best ?? run
 }
 
+/** The first contiguous run of cells carrying `urlId` on one line; 0-based x, inclusive. */
+export function oscLinkSegmentOnLine(
+  line: IBufferLine | undefined,
+  urlId: number
+): { startX: number; endX: number } | null {
+  if (!line || urlId <= 0) {
+    return null
+  }
+  return contiguousMatchingRun(line, (_line, x) => lineCellUrlId(line, x) === urlId)
+}
+
 /**
- * The rows adjacent to `hoveredY` (1-based) that carry the same OSC 8 link id as the
+ * The rows adjacent to `hoveredY` (1-based) that carry the same OSC 8 link as the
  * cell at `hoveredX` (1-based). The hovered row itself is excluded — xterm already
  * underlines its own range.
+ *
+ * Why a URI resolver: when OSC 8 omits id=, xterm assigns every opening its own
+ * link id even for the same URI (OscLinkService.registerLink), so a TUI that
+ * reopens the link per row writes a different id per row. Those rows then match by
+ * URI, not id.
  */
 export function oscLinkSiblingSegments(
   buffer: BufferLike,
   hoveredY: number,
-  hoveredX: number
+  hoveredX: number,
+  resolveUri?: OscLinkUriResolver
 ): LinkRowSegment[] {
   const hoveredLine = buffer.getLine(hoveredY - 1)
   const urlId = lineCellUrlId(hoveredLine, hoveredX - 1)
   if (urlId <= 0) {
     return []
   }
+  const hoveredUri = resolveUri?.(urlId)
+  const rowMatches = (line: IBufferLine | undefined, x: number): boolean => {
+    const cellUrlId = lineCellUrlId(line, x)
+    if (cellUrlId === urlId) {
+      return true
+    }
+    if (cellUrlId <= 0 || hoveredUri === undefined || !resolveUri) {
+      return false
+    }
+    return resolveUri(cellUrlId) === hoveredUri
+  }
   const segments: LinkRowSegment[] = []
   for (const direction of [-1, 1]) {
     let y = hoveredY + direction
     for (;;) {
-      const segment = oscLinkSegmentOnLine(buffer.getLine(y - 1), urlId)
       // Why a whole-row run: a TUI that reopens the link writes one contiguous run per
-      // row; a row with no cell carrying the id ends the link.
+      // row; a row with no cell carrying the link ends it.
+      const segment = contiguousMatchingRun(buffer.getLine(y - 1), rowMatches)
       if (!segment) {
         break
       }
@@ -99,10 +129,32 @@ export function linkRowSegmentsFromRanges(ranges: readonly IBufferRange[]): Link
   }))
 }
 
+/**
+ * Resolves a link id to its URI off the live terminal, sniffing the runtime shape
+ * (getLinkData is on IOscLinkService; the service itself is protected on CoreTerminal).
+ * Returns undefined whenever any hop is missing — callers treat that as id-only matching.
+ */
+export function createOscLinkUriResolver(terminal: object): OscLinkUriResolver {
+  return (urlId: number): string | undefined => {
+    const core = (
+      terminal as {
+        _core?: {
+          _oscLinkService?: { getLinkData?: (id: number) => { uri?: unknown } | undefined }
+        }
+      }
+    )._core
+    const linkData = core?._oscLinkService?.getLinkData?.(urlId)
+    const uri = linkData?.uri
+    return typeof uri === 'string' ? uri : undefined
+  }
+}
+
 export type SiblingLinkUnderliner = {
   underline: (segments: readonly LinkRowSegment[]) => void
   clear: () => void
 }
+
+type MarkerLike = { dispose: () => void }
 
 /** Draws 1px bottom borders over the given rows via decorations; markers scroll with the buffer. */
 export function createSiblingLinkUnderliner(
@@ -110,7 +162,10 @@ export function createSiblingLinkUnderliner(
     buffer: Terminal['buffer']
   }
 ): SiblingLinkUnderliner {
-  let active: IDecoration[] = []
+  // Why pairs: disposing a decoration does not dispose its marker, and Buffer.addMarker
+  // keeps trim/insert/delete listeners per marker until its line is trimmed — a hover
+  // loop would otherwise leak listeners. (#33589 review)
+  let active: { decoration: IDecoration; marker: MarkerLike }[] = []
   const applyUnderline = (element: HTMLElement): void => {
     element.style.borderBottom = '1px solid'
     element.style.pointerEvents = 'none'
@@ -141,12 +196,13 @@ export function createSiblingLinkUnderliner(
         } else {
           decoration.onRender(applyUnderline)
         }
-        active.push(decoration)
+        active.push({ decoration, marker })
       }
     },
     clear() {
-      for (const decoration of active) {
+      for (const { decoration, marker } of active) {
         decoration.dispose()
+        marker.dispose()
       }
       active = []
     }
