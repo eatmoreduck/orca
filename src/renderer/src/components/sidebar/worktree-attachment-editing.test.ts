@@ -110,6 +110,14 @@ describe('isWorkspaceRepositoryAttachment', () => {
     expect(isWorkspaceRepositoryAttachment(foreign, repo('gitlab.corp.example'))).toBe(false)
   })
 
+  it('still rejects another repository behind an SSH alias remote', () => {
+    const otherRepoMr: WorkspaceAttachment = {
+      ...selfHostedMr,
+      url: 'https://gitlab.corp.example/acme/other/-/merge_requests/42'
+    }
+    expect(isWorkspaceRepositoryAttachment(otherRepoMr, aliasRepo)).toBe(false)
+  })
+
   it('keeps requiring a remote identity for URL-backed attachments', () => {
     const noIdentity = { ...aliasRepo, gitRemoteIdentity: undefined }
     expect(isWorkspaceRepositoryAttachment(selfHostedMr, noIdentity)).toBe(false)
