@@ -189,18 +189,32 @@ export function resolveWindowShortcutAction(
   }
 
   // Why: AZERTY prints '-' on Digit6, so the logical-Minus zoom chords would eat a digit-row
-  // legend before the 1-9 block below (#35985). Layouts without a legend on the Digit codes
-  // (US '-') report code Minus and keep the zoom chord.
-  const digitRowLegend = shouldUseDigitRowPhysicalFallback(input, platform)
-  if (!digitRowLegend && actionMatches('zoom.in', input, platform, keybindings, options)) {
+  // legend before the 1-9 block below (#35985). The legend takes precedence only when a digit
+  // range actually consumes it: Ctrl+à (Digit0) and legends with both ranges disabled keep the
+  // zoom chord. Layouts without a legend on the Digit codes (US '-') report code Minus regardless.
+  const worktreeIndex = matchKeybindingDigitIndex(
+    'workspace.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  const tabIndex =
+    worktreeIndex === null
+      ? matchKeybindingDigitIndex('tab.selectByIndex', input, platform, keybindings, options)
+      : null
+  const digitRowLegendPrecedesZoom =
+    (worktreeIndex !== null || tabIndex !== null) &&
+    shouldUseDigitRowPhysicalFallback(input, platform)
+  if (!digitRowLegendPrecedesZoom && actionMatches('zoom.in', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'in' }
   }
 
-  if (!digitRowLegend && actionMatches('zoom.out', input, platform, keybindings, options)) {
+  if (!digitRowLegendPrecedesZoom && actionMatches('zoom.out', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'out' }
   }
 
-  if (!digitRowLegend && actionMatches('zoom.reset', input, platform, keybindings, options)) {
+  if (!digitRowLegendPrecedesZoom && actionMatches('zoom.reset', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'reset' }
   }
 
@@ -258,24 +272,10 @@ export function resolveWindowShortcutAction(
   }
 
   // Ranges have separate conflict scopes and may share a chord; workspace-first preserves deterministic historical precedence.
-  const worktreeIndex = matchKeybindingDigitIndex(
-    'workspace.selectByIndex',
-    input,
-    platform,
-    keybindings,
-    options
-  )
   if (worktreeIndex !== null) {
     return { type: 'jumpToWorktreeIndex', index: worktreeIndex }
   }
 
-  const tabIndex = matchKeybindingDigitIndex(
-    'tab.selectByIndex',
-    input,
-    platform,
-    keybindings,
-    options
-  )
   if (tabIndex !== null) {
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
