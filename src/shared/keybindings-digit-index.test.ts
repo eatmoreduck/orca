@@ -288,3 +288,76 @@ describe('digit-index shortcuts', () => {
     ).toEqual([])
   })
 })
+
+describe('digit-row layouts (AZERTY) (#35985)', () => {
+  // AZERTY prints & é " ' ( - è _ ç à on the physical digit row; the Latin-1 legend is the
+  // layout's truth, while composition artifacts like ™ (U+2122) stay text, not chords.
+  const azertyInput = (
+    digit: string,
+    key: string,
+    modifiers: { meta?: boolean; control?: boolean; alt?: boolean; shift?: boolean }
+  ): Parameters<typeof matchKeybindingDigitIndex>[1] => ({
+    key,
+    code: `Digit${digit}`,
+    meta: Boolean(modifiers.meta),
+    control: Boolean(modifiers.control),
+    alt: Boolean(modifiers.alt),
+    shift: Boolean(modifiers.shift)
+  })
+
+  it.each([
+    ['1', '&'],
+    ['2', 'é'],
+    ['6', '-']
+  ])('captures and matches AZERTY Alt+%s typed as %s on linux', (digit, key) => {
+    const input = azertyInput(digit, key, { alt: true })
+    expect(keybindingFromInputForAction('tab.selectByIndex', input, 'linux')).toEqual({
+      ok: true,
+      value: 'Alt+1'
+    })
+    expect(
+      matchKeybindingDigitIndex('tab.selectByIndex', input, 'linux')
+    ).toBe(Number(digit) - 1)
+  })
+
+  it('captures AZERTY Cmd+& as Mod+1 on macOS', () => {
+    const input = azertyInput('1', '&', { meta: true })
+    expect(keybindingFromInputForAction('tab.selectByIndex', input, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+1'
+    })
+    expect(
+      matchKeybindingDigitIndex('workspace.selectByIndex', input, 'darwin')
+    ).toBe(0)
+  })
+
+  it('rejects the 0 key and modifier-less legends by the existing digit rules', () => {
+    const zero = azertyInput('0', 'à', { alt: true })
+    expect(keybindingFromInputForAction('tab.selectByIndex', zero, 'linux').ok).toBe(false)
+    const modifierless = azertyInput('3', '£', { shift: true })
+    expect(keybindingFromInputForAction('tab.selectByIndex', modifierless, 'linux').ok).toBe(false)
+  })
+
+  it('still rejects composition artifacts beyond Latin-1 on linux', () => {
+    const input = azertyInput('2', '™', { alt: true })
+    expect(keybindingFromInputForAction('tab.selectByIndex', input, 'linux').ok).toBe(false)
+    expect(
+      matchKeybindingDigitIndex('tab.selectByIndex', input, 'linux')
+    ).toBeNull()
+  })
+
+  it('still rejects AltGr (Ctrl+Alt) digit-row input on linux', () => {
+    const input = azertyInput('1', '&', { control: true, alt: true })
+    expect(keybindingFromInputForAction('tab.selectByIndex', input, 'linux').ok).toBe(false)
+    expect(
+      matchKeybindingDigitIndex('tab.selectByIndex', input, 'linux')
+    ).toBeNull()
+  })
+
+  it('does not fire a shiftless binding when Shift is held (US Alt+Shift+!)', () => {
+    const input = azertyInput('1', '!', { alt: true, shift: true })
+    expect(
+      matchKeybindingDigitIndex('tab.selectByIndex', input, 'linux')
+    ).toBeNull()
+  })
+})
