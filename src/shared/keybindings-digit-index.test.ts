@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findKeybindingConflicts,
   isDigitIndexActionId,
+  keybindingFromInput,
   keybindingFromInputForAction,
   matchKeybindingDigitIndex,
   normalizeKeybindingArrayForAction,
@@ -352,6 +353,20 @@ describe('digit-row layouts (AZERTY) (#35985)', () => {
     expect(
       matchKeybindingDigitIndex('tab.selectByIndex', input, 'linux')
     ).toBeNull()
+  })
+
+  it('keeps the logical key for ordinary actions (AZERTY Alt+- records as Alt+Minus)', () => {
+    const input = azertyInput('6', '-', { alt: true })
+    expect(keybindingFromInputForAction('app.settings', input, 'linux')).toEqual({
+      ok: true,
+      value: 'Alt+Minus'
+    })
+  })
+
+  it('captures and matches Alt+0 legends for ordinary chords', () => {
+    const input = azertyInput('0', 'à', { alt: true })
+    expect(keybindingFromInput(input, 'linux')).toEqual({ ok: true, value: 'Alt+0' })
+    expect(keybindingFromInputForAction('tab.selectByIndex', input, 'linux').ok).toBe(false)
   })
 
   it('does not fire a shiftless binding when Shift is held (US Alt+Shift+!)', () => {

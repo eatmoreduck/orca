@@ -143,7 +143,7 @@ export function shouldUseDigitRowPhysicalFallback(
   // the physical Digit code is the layout-independent truth for 1–9 chords (#35985). Legends
   // that also name a punctuation key (AZERTY '-' is Minus on Digit6) follow the same rule.
   // Composition artifacts beyond Latin-1 (macOS Option output like ™ U+2122) stay text.
-  if (!/^Digit[1-9]$/.test(input.code ?? '')) {
+  if (!/^Digit[0-9]$/.test(input.code ?? '')) {
     return false
   }
   const key = input.key ?? ''
@@ -311,8 +311,10 @@ export function keybindingFromInputForAction(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): KeybindingValidationResult {
+  // Why: only the 1-9 ranged actions key by the physical digit; ordinary actions keep
+  // their logical key (AZERTY Alt+- records as Alt+Minus, not Alt+6).
   const result = keybindingFromInputWithOptions(
-    digitRowLegendInputForDigitIndex(input, platform),
+    isDigitIndexActionId(actionId) ? digitRowLegendInputForDigitIndex(input, platform) : input,
     platform,
     normalizeOptionsForAction(actionId)
   )
